@@ -132,3 +132,51 @@ def sparse_subselect_cols(cols, X_data, X_indptr, X_indices):
 
     return X_data_g, X_indptr_g, X_indices_g
 
+
+# @njit
+def spectral_norm_dense(X, n_samples, max_iter=100, tol=1e-6):
+    """Compute the spectral norm of matrix ``X`` with power method.
+
+    Parameters
+    ----------
+    X : array, shape (n_elements,)
+         ``data`` attribute of the sparse CSC matrix ``X``.
+
+    n_samples : int
+        number of rows of ``X``.
+
+    max_iter : int, default 20
+        Maximum number of power method iterations.
+
+    tol : float, default 1e-6
+        Tolerance for convergence.
+
+    Returns
+    -------
+    eigenvalue : float
+        The largest singular value of ``X``.
+
+    References
+    ----------
+    .. [1] Alfio Quarteroni, Riccardo Sacco, Fausto Saleri "Numerical Mathematics",
+        chapter 5, page 192-195.
+    """
+    # init vec with norm(vec) == 1.
+    eigenvector = np.random.randn(n_samples)
+    eigenvector /= norm(eigenvector)
+    eigenvalue = 1.
+
+    for _ in range(max_iter):
+        # computes X @ X.T @ vec, with X csc encoded
+        vec = np.dot(np.dot(X, X.T), eigenvector)
+        norm_vec = norm(vec)
+        eigenvalue = vec @ eigenvector
+
+        # norm(X @ X.T @ eigenvector - eigenvalue * eigenvector) <= tol
+        # inequality (5.25) in ref [1] is squared
+        if norm_vec ** 2 - eigenvalue ** 2 <= tol ** 2:
+            break
+        
+        eigenvector = vec / norm_vec
+
+    return np.sqrt(eigenvalue)

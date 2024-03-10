@@ -29,7 +29,7 @@ def proj_L2ball(u):
     return u / norm_u
 
 
-@njit
+# @njit
 def BST(x, u, positive=False):
     """Block soft-thresholding of vector x at level u.
 
@@ -61,6 +61,7 @@ def BST(x, u, positive=False):
         result[positive_entries] = BST(x[positive_entries], u, positive=False)
         return result
     norm_x = norm(x)
+    # print('BST norm_x', norm_x)
     if norm_x < u:
         return np.zeros_like(x)
     else:

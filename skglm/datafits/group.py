@@ -49,6 +49,11 @@ class QuadraticGroup(BaseDatafit):
             grp_g_indices = grp_indices[grp_ptr[g]: grp_ptr[g+1]]
             X_g = X[:, grp_g_indices]
             lipschitz[g] = norm(X_g, ord=2) ** 2 / len(y)
+            print('get lipschitz', g, lipschitz[g])
+
+            # if g==6:
+            #     import pdb; pdb.set_trace();
+            #     pass
 
         return lipschitz
 
@@ -64,6 +69,7 @@ class QuadraticGroup(BaseDatafit):
                 grp_g_indices, X_data, X_indptr, X_indices)
             lipschitz[g] = spectral_norm(
                 X_data_g, X_indptr_g, X_indices_g, n_rows) ** 2 / len(y)
+            print('get lipschitz sparse', g, lipschitz[g])
 
         return lipschitz
 
