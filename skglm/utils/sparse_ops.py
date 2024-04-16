@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.linalg import norm
-from numba import njit
+from numba import njit, prange, boolean
 
 
 @njit
@@ -48,9 +48,13 @@ def spectral_norm(X_data, X_indptr, X_indices, n_samples,
         norm_vec = norm(vec)
         eigenvalue = vec @ eigenvector
 
+        # this seems to be necessary to prevent numerical precision-related crashes with njit
+        if not np.isfinite(norm_vec):
+            break
+
         # norm(X @ X.T @ eigenvector - eigenvalue * eigenvector) <= tol
         # inequality (5.25) in ref [1] is squared
-        if norm_vec ** 2 - eigenvalue ** 2 <= tol ** 2:
+        if (norm_vec ** 2 - eigenvalue ** 2) <= tol ** 2:
             break
 
         eigenvector = vec / norm_vec
@@ -133,17 +137,14 @@ def sparse_subselect_cols(cols, X_data, X_indptr, X_indices):
     return X_data_g, X_indptr_g, X_indices_g
 
 
-# @njit
-def spectral_norm_dense(X, n_samples, max_iter=100, tol=1e-6):
+@njit
+def spectral_norm_dense(X, max_iter=100, tol=1e-6):
     """Compute the spectral norm of matrix ``X`` with power method.
 
     Parameters
     ----------
-    X : array, shape (n_elements,)
-         ``data`` attribute of the sparse CSC matrix ``X``.
-
-    n_samples : int
-        number of rows of ``X``.
+    X : array, shape (n_samples, n_features)
+        Design matrix.
 
     max_iter : int, default 20
         Maximum number of power method iterations.
@@ -162,13 +163,14 @@ def spectral_norm_dense(X, n_samples, max_iter=100, tol=1e-6):
         chapter 5, page 192-195.
     """
     # init vec with norm(vec) == 1.
-    eigenvector = np.random.randn(n_samples)
+    eigenvector = np.random.randn(X.shape[0])
     eigenvector /= norm(eigenvector)
     eigenvalue = 1.
 
+    XXT = np.dot(X, X.T)
     for _ in range(max_iter):
-        # computes X @ X.T @ vec, with X csc encoded
-        vec = np.dot(np.dot(X, X.T), eigenvector)
+
+        vec = np.dot(XXT, eigenvector)
         norm_vec = norm(vec)
         eigenvalue = vec @ eigenvector
 
@@ -180,3 +182,82 @@ def spectral_norm_dense(X, n_samples, max_iter=100, tol=1e-6):
         eigenvector = vec / norm_vec
 
     return np.sqrt(eigenvalue)
+
+# @njit(fastmath=True)
+def sparse_subselect_rows(rows, X_data, X_indptr, X_indices):
+    """Summary
+    
+    Parameters
+    ----------
+    cols : TYPE
+        Description
+    X_data : TYPE
+        Description
+    X_indices : TYPE
+        Description
+    X_indptr : TYPE
+        Description
+    """
+
+    # calculate number of indices for each column
+    # for r in rows:
+    #     n_indices_j[i] += 
+
+    X_indptr_g = np.zeros(len(X_indptr), dtype=X_indptr.dtype)
+    n_indices_g = np.zeros(len(X_indptr)-1, dtype=X_indptr.dtype)
+    for i in range(len(X_indptr)-1):
+        inds_g = X_indices[X_indptr[i]:X_indptr[i+1]]
+        select = in1d_vec_nb(inds_g, rows)
+        n_indices_g[i] = np.count_nonzero(select)
+        X_indptr_g[i+1] = np.sum(n_indices_g)
+
+    n_indices = np.sum(n_indices_g)
+    X_data_g = np.zeros(n_indices, dtype=X_data.dtype)
+    X_indices_g = np.zeros(n_indices, dtype=X_indices.dtype)
+    for i in range(len(X_indptr)-1):
+        inds_g = X_indices[X_indptr[i]:X_indptr[i+1]]
+        select = in1d_vec_nb(inds_g, rows)
+        X_indices_g[X_indptr_g[i]:X_indptr_g[i+1]] = inds_g[select]
+        X_data_g[X_indptr_g[i]:X_indptr_g[i+1]] = X_data[X_indptr[i]:X_indptr[i+1]][select]
+
+    return X_data_g, X_indptr_g, X_indices_g
+
+
+
+@njit(fastmath=True)
+def sparse_sum_rows(X_data, X_indptr, X_indices, n_samples):
+    """Summary
+    
+    Parameters
+    ----------
+    X_data : TYPE
+        Description
+    X_indices : TYPE
+        Description
+    X_indptr : TYPE
+        Description
+    """
+
+    sum_rows = np.zeros(n_samples, dtype=X_data.dtype)
+    for j in range(len(X_indices)):
+        sum_rows[X_indices[j]] += X_data[j]
+
+    return sum_rows
+
+
+# @njit(parallel=True)
+def in1d_vec_nb(ar1, ar2):
+  #arr and ar2 have to be numpy arrays
+  #if ar2 is a list with different dtypes this 
+  #function will fail
+
+  out=np.empty(ar1.shape[0], dtype=bool)
+  ar2_set=set(ar2)
+
+  for i in prange(ar1.shape[0]):
+    if ar1[i] in ar2_set:
+      out[i]=True
+    else:
+      out[i]=False
+
+  return out
