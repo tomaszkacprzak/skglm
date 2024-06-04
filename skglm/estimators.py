@@ -1548,18 +1548,21 @@ class GroupLasso(LinearModel, RegressorMixin):
     The optimization objective for GroupLasso is:
 
     .. math::
-        1 / (2 xx n_"samples") \sum_g ||y - X_g w_g||_2 ^ 2 + alpha \sum_g  weights_g ||w_g||_2
+        1 / (2 xx n_"samples") ||y - X w||_2 ^ 2 + alpha \sum_g
+        weights_g ||w_{[g]}||_2
+
+    with :math:`w_{[g]}` the coefficients of the g-th group.
 
     Parameters
     ----------
     groups : int | list of ints | list of lists of ints
-        Partition of features used in the penalty on `w`.
+        Partition of features used in the penalty on ``w``.
         If an int is passed, groups are contiguous blocks of features, of size
-        `groups`.
+        ``groups``.
         If a list of ints is passed, groups are assumed to be contiguous,
-        group number `g` being of size `groups[g]`.
-        If a list of lists of ints is passed, `groups[g]` contains the
-        feature indices of the group number `g`
+        group number ``g`` being of size ``groups[g]``.
+        If a list of lists of ints is passed, ``groups[g]`` contains the
+        feature indices of the group number ``g``.
 
     alpha : float, optional
         Penalty strength.
@@ -1568,32 +1571,24 @@ class GroupLasso(LinearModel, RegressorMixin):
         Positive weights used in the L1 penalty part of the Lasso
         objective. If ``None``, weights equal to 1 are used.
 
-    max_iter : int, optional
+    max_iter : int, optional (default=50)
         The maximum number of iterations (subproblem definitions).
 
-    max_epochs : int
+    max_epochs : int, optional (default=50_000)
         Maximum number of CD epochs on each subproblem.
 
-    p0 : int
+    p0 : int, optional (default=10)
         First working set size.
 
-    verbose : bool or int
+    verbose : bool or int, optional (default=0)
         Amount of verbosity.
 
-    tol : float, optional
+    tol : float, optional (default=1e-4)
         Stopping criterion for the optimization.
 
-    positive : bool, optional
-        When set to ``True``, forces the coefficient vector to be positive.
+    positive : bool, optional (defautl=False)
 
-    fit_intercept : bool, optional (default=True)
-        Whether or not to fit an intercept.
-
-    warm_start : bool, optional (default=False)
-        When set to ``True``, reuse the solution of the previous call to fit as
-        initialization, otherwise, just erase the previous solution.
-
-    ws_strategy : str
+    ws_strategy : str, optional (default="subdiff")
         The score used to build the working set. Can be ``fixpoint`` or ``subdiff``.
 
     Attributes
@@ -1601,27 +1596,19 @@ class GroupLasso(LinearModel, RegressorMixin):
     coef_ : array, shape (n_features,)
         parameter vector (:math:`w` in the cost function formula)
 
-    sparse_coef_ : scipy.sparse matrix, shape (n_features, 1)
-        ``sparse_coef_`` is a readonly property derived from ``coef_``
-
     intercept_ : float
         constant term in decision function.
 
     n_iter_ : int
         Number of subproblems solved to reach the specified tolerance.
 
-    See Also
-    --------
-    MCPRegression : Sparser regularization than L1 norm.
-    Lasso : Unweighted Lasso regularization.
-
     Notes
     -----
-    Supports weights equal to 0, i.e. unpenalized features.
+    Supports weights equal to ``0``, i.e. unpenalized features.
     """
 
-    def __init__(self, groups, alpha=1., weights=None, max_iter=50, max_epochs=50_000, p0=10,
-                 verbose=0, tol=1e-4, positive=False, fit_intercept=True,
+    def __init__(self, groups, alpha=1., weights=None, max_iter=50, max_epochs=50_000,
+                 p0=10, verbose=0, tol=1e-4, positive=False, fit_intercept=True,
                  warm_start=False, ws_strategy="subdiff"):
         super().__init__()
         self.alpha = alpha
@@ -1643,25 +1630,25 @@ class GroupLasso(LinearModel, RegressorMixin):
         Parameters
         ----------
         X : array-like, shape (n_samples, n_features)
-            Training data, where n_samples is the number of samples and
+            Training data, where ``n_samples`` is the number of samples and
             n_features is the number of features.
         y : array-like, shape (n_samples,)
-            Target vector relative to X.
+            Target vector relative to ``X``.
 
         Returns
         -------
-        self :
+        self : Instance of GroupLasso
             Fitted estimator.
         """
         grp_indices, grp_ptr = grp_converter(self.groups, X.shape[1])
         group_sizes = np.diff(grp_ptr)
 
-        if X.shape[1] != np.sum(group_sizes):
-            raise ValueError("The number total number of group members \
-                              must equal the number of features. Got %s, expected %s." % (
-                np.sum(group_sizes), X.shape[1]))
+        n_features = np.sum(group_sizes)
+        if X.shape[1] != n_features:
+            raise ValueError(
+                "The total number of group members must equal the number of features. "
+                f"Got {n_features}, expected {X.shape[1]}.")
 
-        
         weights = np.ones(len(group_sizes)) if self.weights is None else self.weights
 
         group_penalty = WeightedGroupL2(alpha=self.alpha, grp_ptr=grp_ptr,
