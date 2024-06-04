@@ -5,8 +5,6 @@ from scipy import sparse
 
 from skglm.datafits.base import BaseDatafit
 from skglm.datafits.single_task import Logistic
-<<<<<<< HEAD
-from skglm.utils.sparse_ops import spectral_norm, sparse_subselect_cols, spectral_norm_dense
 
 class QuadraticGroupCorr(BaseDatafit):
     r"""Quadratic datafit used with group penalties, with additional
@@ -124,10 +122,6 @@ class QuadraticGroupCorr(BaseDatafit):
     def intercept_update_step(self, y, Xw):
         return np.mean(Xw - y)
 
-=======
-from skglm.utils.sparse_ops import spectral_norm, sparse_columns_slice
->>>>>>> main
-
 
 class QuadraticGroup(BaseDatafit):
     r"""Quadratic datafit used with group penalties.
@@ -177,15 +171,7 @@ class QuadraticGroup(BaseDatafit):
     def get_lipschitz_sparse(self, X_data, X_indptr, X_indices, y):
         grp_ptr, grp_indices = self.grp_ptr, self.grp_indices
         n_groups = len(grp_ptr) - 1
-<<<<<<< HEAD
-        n_rows = len(y)
-        
-        lipschitz = np.zeros(n_groups, dtype=X_data.dtype)
-        for g in range(n_groups):
-            grp_g_indices = grp_indices[grp_ptr[g]: grp_ptr[g+1]]
-            X_data_g, X_indptr_g, X_indices_g = sparse_subselect_cols(
-                grp_g_indices, X_data, X_indptr, X_indices)
-=======
+
 
         lipschitz = np.zeros(n_groups, dtype=X_data.dtype)
         for g in range(n_groups):
@@ -194,17 +180,9 @@ class QuadraticGroup(BaseDatafit):
                 grp_g_indices, X_data, X_indptr, X_indices)
             lipschitz[g] = spectral_norm(
                 X_data_g, X_indptr_g, X_indices_g, len(y)) ** 2 / len(y)
->>>>>>> main
 
-            lipschitz[g] = spectral_norm(
-                X_data_g, X_indptr_g, X_indices_g, n_rows) ** 2 / len(y)
-            # print('get lipschitz sparse', g, lipschitz[g])
-
-<<<<<<< HEAD
         return lipschitz
 
-=======
->>>>>>> main
     def value(self, y, w, Xw):
         return norm(y - Xw) ** 2 / (2 * len(y))
 

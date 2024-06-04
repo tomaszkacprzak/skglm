@@ -27,7 +27,7 @@ from skglm.penalties import (L1, WeightedL1, L1_plus_L2, L2, WeightedGroupL2,
 from skglm.utils.data import grp_converter
 
 
-def _glm_fit(X, y, model, datafit, penalty, solver):
+def _glm_fit(X, y, model, datafit, penalty, solver, w_init=None):
     is_classif = isinstance(datafit, (Logistic, QuadraticSVC))
     fit_intercept = solver.fit_intercept
 
@@ -121,13 +121,22 @@ def _glm_fit(X, y, model, datafit, penalty, solver):
             w = np.hstack([w, model.intercept_])
         Xw = X_ @ w[:w.shape[0] - fit_intercept] + fit_intercept * w[-1]
     else:
-        # TODO this should be solver.get_init() do delegate the work
-        if y.ndim == 1:
-            w = np.zeros(n_features + fit_intercept, dtype=X_.dtype)
-            Xw = np.zeros(n_samples, dtype=X_.dtype)
-        else:  # multitask
-            w = np.zeros((n_features + fit_intercept, y.shape[1]), dtype=X_.dtype)
-            Xw = np.zeros(y.shape, dtype=X_.dtype)
+
+        if w_init is None:
+
+            # TODO this should be solver.get_init() do delegate the work
+            if y.ndim == 1:
+                w = np.zeros(n_features + fit_intercept, dtype=X_.dtype)
+                Xw = np.zeros(n_samples, dtype=X_.dtype)
+            else:  # multitask
+                w = np.zeros((n_features + fit_intercept, y.shape[1]), dtype=X_.dtype)
+                Xw = np.zeros(y.shape, dtype=X_.dtype)
+
+        else:
+
+            # works for dense/sparse and signle/multi task
+            w = w_init
+            Xw = X.dot(w_init) 
 
     # check consistency of weights for WeightedL1
     if isinstance(penalty, WeightedL1):
@@ -1623,6 +1632,13 @@ class GroupLasso(LinearModel, RegressorMixin):
         self.fit_intercept = fit_intercept
         self.warm_start = warm_start
         self.verbose = verbose
+        self.intercept_init = None
+        self.coef_init = None
+
+    def set_init(self, coef_init, intercept_init=None):
+
+        self.intercept_init = intercept_init
+        self.coef_init = coef_init
 
     def fit(self, X, y):
         """Fit the model according to the given training data.
@@ -1660,4 +1676,4 @@ class GroupLasso(LinearModel, RegressorMixin):
             fit_intercept=self.fit_intercept, warm_start=self.warm_start,
             verbose=self.verbose)
 
-        return _glm_fit(X, y, self, quad_group, group_penalty, solver)
+        return _glm_fit(X, y, self, quad_group, group_penalty, solver, w_init=self.coef_init)
